@@ -1,68 +1,78 @@
 #_____________________VARIABLES____________________
-CC=clang++
 
-# FORMAT: bin/
-EXE_PATH:=bin/
-EXE_NAME=$(EXE_PATH)main
+CXX := clang++
+
+EXE_PATH := bin
+EXE_NAME := $(EXE_PATH)/main
+
+SRC_DIR := src
+INC_DIR := include
+OBJ_PATH := build
+
+CPP_VERSION := 20
+
+MOSS_PATH := ../moss/core/include
+MOSS_EXT_PATH := ../moss/extensions/include
+MOSS_EXT_LIB_PATH := ../moss/extensions/bin/debug
+
+SRC := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_PATH)/%.o,$(SRC))
+DEP := $(OBJ:.o=.d)
+
+CXXFLAGS := -Wall -g \
+	-I$(INC_DIR) \
+	-I$(MOSS_PATH) \
+	-I$(MOSS_EXT_PATH) \
+	-std=c++$(CPP_VERSION) \
+	-Wno-reorder-ctor \
+	-MMD -MP
+
+LDFLAGS := -L$(MOSS_EXT_LIB_PATH)
+LDLIBS := -lvulkan -lmossExtensions -lvk-bootstrap -lglfw
 
 
-SRC=src/*.cpp
-SRC_DIR=src
-INC_DIR=include
-OBJ_PATH=build/
-CPP_VERSION=20
+#_____________________BUILD_________________________
 
-# Add -O3 for preformance
-# For debbing, refrain to using -O3
-CFLAGS := -Wall -g -I$(INC_DIR) -std=c++$(CPP_VERSION) -Wno-reorder-ctor
-LDFLAGS := 
+.PHONY: all compile link run debug clean
 
-#_____________________COMPILE______________________
-all: compile link clean_opt run
-.PHONY: all
+all: $(EXE_NAME) run
 
-debug: debugcompile debug_clean
-.PHONY: debug
+compile: $(OBJ)
 
-debugcompile:
-	$(CC) --debug $(SRC) $(CFLAGS) $(LDFLAGS)
-.PHONY: debugcompile
+link: $(EXE_NAME)
 
-debug_clean:
-	rm -r $(EXE_PATH)debug.dSYM
-	mv a.out $(EXE_PATH)debug
-	mv a.out.dSYM $(EXE_PATH)debug.dSYM
-
-compile:
-	$(CC) -c $(SRC) $(CFLAGS)
-.PHONY: compile
-
-link:
-	$(CC) ./*.o $(LDFLAGS)
-.PHONY: link
-
-#_____________________CLEAN________________________
-clean_opt: obj exe
-
-ifdef OBJ_PATH
-obj:
-	mv ./*.o $(OBJ_PATH)
-else
-obj:
+$(OBJ_PATH)/%.o: $(SRC_DIR)/%.cpp
 	mkdir -p $(OBJ_PATH)
-	mv ./*.o $(OBJ_PATH)
-endif
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-ifdef EXE_PATH
-exe:
+$(EXE_NAME): $(OBJ)
 	mkdir -p $(EXE_PATH)
-	mv a.out $(EXE_NAME)
-else
-exe:
-	mv a.out $(EXE_NAME)
-endif
+	$(CXX) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $@
 
-#_____________________RUN__________________________
-run:
+
+#_____________________DEBUG_________________________
+
+debug: $(EXE_NAME)
 	./$(EXE_NAME)
-.PHONY: run
+
+
+#_____________________RUN___________________________
+
+run: $(EXE_NAME)
+	./$(EXE_NAME)
+
+
+#_____________________CLEAN_________________________
+
+clean:
+	rm -rf $(OBJ_PATH) $(EXE_PATH)/main
+
+#_____________________SHADER________________________
+
+shader:
+	glslc shaders/diffuse.comp -o shaders/diffuse.comp.spv
+	glslc shaders/display.frag -o shaders/display.frag.spv
+	glslc shaders/fullscreen.vert -o shaders/fullscreen.vert.spv
+	
+
+-include $(DEP)
