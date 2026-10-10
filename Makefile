@@ -70,9 +70,9 @@ clean:
 #_____________________SHADER________________________
 
 shader:
-	glslc shaders/diffuse.comp -o shaders/diffuse.comp.spv
-	glslc shaders/display.frag -o shaders/display.frag.spv
-	glslc shaders/fullscreen.vert -o shaders/fullscreen.vert.spv
+	glslc shaders/diffuse.comp -o build/diffuse.comp.spv
+	glslc shaders/display.frag -o build/display.frag.spv
+	glslc shaders/fullscreen.vert -o build/fullscreen.vert.spv
 	
 
 -include $(DEP)

@@ -2,18 +2,20 @@
   {
     "arguments": [
       "/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin/clang++",
-      "-c",
       "-Wall",
       "-g",
       "-Iinclude",
       "-I../moss/core/include",
       "-I../moss/extensions/include",
-      "-I",
       "-std=c++20",
       "-Wno-reorder-ctor",
+      "-c",
+      "-o",
+      "build/main.o",
       "src/main.cpp"
     ],
     "directory": "/home/snbohman/dev/smoke",
-    "file": "/home/snbohman/dev/smoke/src/main.cpp"
+    "file": "/home/snbohman/dev/smoke/src/main.cpp",
+    "output": "/home/snbohman/dev/smoke/build/main.o"
   }
 ]

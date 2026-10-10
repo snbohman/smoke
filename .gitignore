@@ -1,4 +1,3 @@
-.git
-.direnv
-.envrc
-flake.lock
+.direnv/
+.cache/
+build/

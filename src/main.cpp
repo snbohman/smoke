@@ -1,5 +1,3 @@
-#include "moss/extensions/vulkan/components.hpp"
-#include "moss/meta/logs.hpp"
 #include <moss/extensions/vulkan.hpp>
 #include <moss/moss.hpp>
 
@@ -18,7 +16,7 @@ public:
                 .attach<vk::Pass>()
                 .attach<vk::Shader<vk::PipelineKind::Compute>>()
                 .attach<vk::PassOrder>(0)
-                .attach<vk::ComputeShader>("shaders/diffuse.comp.spv")
+                .attach<vk::ComputeShader>("build/diffuse.comp.spv")
                 .attach<vk::GridDispatch>(80, 45, 1)   // workgroup counts: ceil(w/16), ceil(h/16)
                 .attach<vk::Bindings>(std::vector<vk::Binding>{
                     {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, "fieldA"},
@@ -29,8 +27,8 @@ public:
                 .attach<vk::Pass>()
                 .attach<vk::Shader<vk::PipelineKind::Graphics>>()
                 .attach<vk::PassOrder>(100)
-                .attach<vk::VertexShader>("shaders/fullscreen.vert.spv")
-                .attach<vk::FragmentShader>("shaders/display.frag.spv")
+                .attach<vk::VertexShader>("build/fullscreen.vert.spv")
+                .attach<vk::FragmentShader>("build/display.frag.spv")
                 .attach<vk::PipelineState>()
                 .attach<vk::DrawCall>()
                 .attach<vk::Bindings>(std::vector<vk::Binding>{
