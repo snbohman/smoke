@@ -27,7 +27,7 @@ CXXFLAGS := -Wall -g \
 	-Wno-reorder-ctor \
 	-MMD -MP
 
-LDFLAGS := -L$(MOSS_EXT_LIB_PATH)
+LDFLAGS := -L$(MOSS_EXT_LIB_PATH) -L$(VK_LAYER_PATH)
 LDLIBS := -lvulkan -lmossExtensions -lvk-bootstrap -lglfw
 
 
@@ -69,10 +69,15 @@ clean:
 
 #_____________________SHADER________________________
 
-shader:
-	glslc shaders/diffuse.comp -o build/diffuse.comp.spv
-	glslc shaders/display.frag -o build/display.frag.spv
-	glslc shaders/fullscreen.vert -o build/fullscreen.vert.spv
+SHADERS := $(wildcard shaders/*.vert shaders/*.frag shaders/*.comp)
+SPV_FILES := $(patsubst shaders/%,build/%.spv,$(SHADERS))
+
+.PHONY: shader
+shader: $(SPV_FILES)
+
+build/%.spv: shaders/%
+	@mkdir -p build
+	glslc $< -o $@
 	
 
 -include $(DEP)
