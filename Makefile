@@ -13,6 +13,7 @@ CPP_VERSION := 20
 
 MOSS_PATH := ../moss/core/include
 MOSS_EXT_PATH := ../moss/extensions/include
+MOSS_EXT_EXT_PATH := ../moss/extensions/external
 MOSS_EXT_LIB_PATH := ../moss/extensions/bin/debug
 
 SRC := $(wildcard $(SRC_DIR)/*.cpp)
@@ -23,6 +24,7 @@ CXXFLAGS := -Wall -g \
 	-I$(INC_DIR) \
 	-I$(MOSS_PATH) \
 	-I$(MOSS_EXT_PATH) \
+	-I$(MOSS_EXT_EXT_PATH) \
 	-std=c++$(CPP_VERSION) \
 	-Wno-reorder-ctor \
 	-MMD -MP
@@ -33,9 +35,9 @@ LDLIBS := -lvulkan -lmossExtensions -lvk-bootstrap -lglfw
 
 #_____________________BUILD_________________________
 
-.PHONY: all compile link run debug clean
+.PHONY: all compile link run debug clean shader
 
-all: $(EXE_NAME) run
+all: shader $(EXE_NAME) run
 
 compile: $(OBJ)
 
@@ -69,15 +71,21 @@ clean:
 
 #_____________________SHADER________________________
 
-SHADERS := $(wildcard shaders/*.vert shaders/*.frag shaders/*.comp)
-SPV_FILES := $(patsubst shaders/%,build/%.spv,$(SHADERS))
+SHADER_SRC_DIR := shaders
+SHADER_BUILD_DIR := $(OBJ_PATH)/shader
 
-.PHONY: shader
+SHADERS := $(shell find $(SHADER_SRC_DIR) -type f \( \
+	-name '*.vert' -o \
+	-name '*.frag' -o \
+	-name '*.comp' \
+\) 2>/dev/null)
+
+SPV_FILES := $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_BUILD_DIR)/%.spv,$(SHADERS))
+
 shader: $(SPV_FILES)
 
-build/%.spv: shaders/%
-	@mkdir -p build
+$(SHADER_BUILD_DIR)/%.spv: $(SHADER_SRC_DIR)/%
+	@mkdir -p $(dir $@)
 	glslc $< -o $@
 	
-
 -include $(DEP)

@@ -1,0 +1,51 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(push_constant) uniform Push {
+    float dt;
+    float inflow;
+    float obstacleX;
+    float obstacleY;
+    float obstacleRadius;
+    float gain;
+    int   view;
+    float windowWidth;
+    float windowHeight;
+    float viscosity;
+    float dyeStripe;
+    int   reset;
+    int   palette;
+} pc;
+
+layout(binding = 0) uniform sampler2D uVelocity;
+layout(rgba16f, binding = 1) uniform writeonly image2D uVelocityOut;
+layout(rgba16f, binding = 2) uniform writeonly image2D uSourceOut;
+
+bool isSolid(vec2 cellCentre) {
+    return distance(cellCentre, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius;
+}
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uVelocityOut);
+    if (any(greaterThanEqual(id, size))) return;
+
+    vec2 cellCentre = vec2(id) + 0.5;
+    vec2 advected;
+
+    if (pc.reset != 0) {
+        // Restart: uniform flow at the inflow speed
+        advected = vec2(pc.inflow, 0.0);
+    } else {
+        // Walk backwards along the flow and read what was there (bilinear)
+        vec2 velocity = texelFetch(uVelocity, id, 0).xy;
+        vec2 departure = cellCentre - pc.dt * velocity;
+        advected = texture(uVelocity, departure / vec2(size)).xy;
+    }
+
+    if (isSolid(cellCentre)) advected = vec2(0.0);                 // obstacle
+    if (id.y == 0 || id.y == size.y - 1) advected.y = 0.0;         // top/bottom walls
+    if (id.x == 0) advected = vec2(pc.inflow, 0.0);                // inflow edge
+
+    imageStore(uVelocityOut, id, vec4(advected, 0.0, 0.0));
+    imageStore(uSourceOut, id, vec4(advected, 0.0, 0.0));          // right-hand side of the viscosity solve
+}

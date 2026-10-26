@@ -1,0 +1,50 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(push_constant) uniform Push {
+    float dt;
+    float inflow;
+    float obstacleX;
+    float obstacleY;
+    float obstacleRadius;
+    float gain;
+    int   view;
+    float windowWidth;
+    float windowHeight;
+    float viscosity;
+    float dyeStripe;
+    int   reset;
+    int   palette;
+} pc;
+
+layout(rgba16f, binding = 0) uniform readonly  image2D uVelocity;
+layout(rgba16f, binding = 1) uniform readonly  image2D uSource;
+layout(rgba16f, binding = 2) uniform writeonly image2D uVelocityOut;
+bool isSolid(vec2 cellCentre) {
+    return distance(cellCentre, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius;
+}
+
+// Velocity of a neighbour cell: walls copy the edge, the obstacle is at rest (no slip)
+vec2 velocityAt(ivec2 cell, ivec2 size) {
+    cell = clamp(cell, ivec2(0), size - 1);
+    if (isSolid(vec2(cell) + 0.5)) return vec2(0.0);
+    return imageLoad(uVelocity, cell).xy;
+}
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uVelocityOut);
+    if (any(greaterThanEqual(id, size))) return;
+
+    float alpha = pc.viscosity * pc.dt;
+    vec2 neighbours = velocityAt(id + ivec2(1, 0), size) + velocityAt(id - ivec2(1, 0), size)
+                    + velocityAt(id + ivec2(0, 1), size) + velocityAt(id - ivec2(0, 1), size);
+
+    vec2 source = imageLoad(uSource, id).xy;
+    vec2 velocity = (source + alpha * neighbours) / (1.0 + 4.0 * alpha);
+
+    if (isSolid(vec2(id) + 0.5)) velocity = vec2(0.0);
+    if (id.y == 0 || id.y == size.y - 1) velocity.y = 0.0;
+    if (id.x == 0) velocity = vec2(pc.inflow, 0.0);
+
+    imageStore(uVelocityOut, id, vec4(velocity, 0.0, 0.0));
+}

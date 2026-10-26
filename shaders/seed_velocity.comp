@@ -1,0 +1,29 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(push_constant) uniform Push {
+    float dt;
+    float inflow;
+    float obstacleX;
+    float obstacleY;
+    float obstacleRadius;
+    float gain;
+    int   view;
+    float windowWidth;
+    float windowHeight;
+} pc;
+
+layout(rgba16f, binding = 0) uniform writeonly image2D uVelocityOut;
+
+bool isSolid(vec2 cellCentre) {
+    return distance(cellCentre, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius;
+}
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uVelocityOut);
+    if (any(greaterThanEqual(id, size))) return;   // dispatch rounds up
+
+    vec2 velocity = isSolid(vec2(id) + 0.5) ? vec2(0.0) : vec2(pc.inflow, 0.0);
+    imageStore(uVelocityOut, id, vec4(velocity, 0.0, 0.0));
+}

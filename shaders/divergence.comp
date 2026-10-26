@@ -1,0 +1,41 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(push_constant) uniform Push {
+    float dt;
+    float inflow;
+    float obstacleX;
+    float obstacleY;
+    float obstacleRadius;
+    float gain;
+    int   view;
+    float windowWidth;
+    float windowHeight;
+} pc;
+
+layout(binding = 0) uniform sampler2D uVelocity;
+layout(rgba16f, binding = 1) uniform writeonly image2D uDivergence;
+
+bool isSolid(vec2 cellCentre) {
+    return distance(cellCentre, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius;
+}
+
+// Velocity of a neighbour cell: walls copy the edge, the obstacle is at rest
+vec2 velocityAt(ivec2 cell, ivec2 size) {
+    cell = clamp(cell, ivec2(0), size - 1);
+    if (isSolid(vec2(cell) + 0.5)) return vec2(0.0);
+    return texelFetch(uVelocity, cell, 0).xy;
+}
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uDivergence);
+    if (any(greaterThanEqual(id, size))) return;
+
+    float right = velocityAt(id + ivec2(1, 0), size).x;
+    float left  = velocityAt(id - ivec2(1, 0), size).x;
+    float up    = velocityAt(id + ivec2(0, 1), size).y;
+    float down  = velocityAt(id - ivec2(0, 1), size).y;
+
+    float divergence = 0.5 * ((right - left) + (up - down));
+    imageStore(uDivergence, id, vec4(divergence, 0.0, 0.0, 0.0));
+}
