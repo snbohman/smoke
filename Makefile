@@ -1,9 +1,14 @@
+#_____________________SHELL_________________________
+
+SHELL := cmd.exe
+.SHELLFLAGS := /C
+
 #_____________________VARIABLES____________________
 
 CXX := clang++
 
 EXE_PATH := bin
-EXE_NAME := $(EXE_PATH)/main
+EXE_NAME := $(EXE_PATH)/main.exe
 
 SRC_DIR := src
 INC_DIR := include
@@ -26,12 +31,23 @@ CXXFLAGS := -Wall -g \
 	-I$(MOSS_EXT_PATH) \
 	-I$(MOSS_EXT_EXT_PATH) \
 	-std=c++$(CPP_VERSION) \
+	-I$(VULKAN_SDK)/include \
+	-I$(GLFW_ROOT)/include \
 	-Wno-reorder-ctor \
 	-MMD -MP
 
-LDFLAGS := -L$(MOSS_EXT_LIB_PATH) -L$(VK_LAYER_PATH)
-LDLIBS := -lvulkan -lmossExtensions -lvk-bootstrap -lglfw
+LDFLAGS := -L$(MOSS_EXT_LIB_PATH) -L$(VULKAN_SDK)/Lib -L$(GLFW_ROOT)/lib-vc2022
+LDLIBS := -lvulkan-1 -lmossExtensions -lglfw3 -lgdi32 -luser32 -lshell32
 
+#_____________________SHADER VARIABLES______________
+
+SHADER_SRC_DIR := shaders
+SHADER_BUILD_DIR := $(OBJ_PATH)/shader
+
+# Recursively discover .vert, .frag, and .comp files.
+SHADERS := $(shell powershell -NoProfile -Command "Get-ChildItem '$(SHADER_SRC_DIR)' -Recurse -File | Where-Object { $$_.Extension -eq '.vert' -or $$_.Extension -eq '.frag' -or $$_.Extension -eq '.comp' } | ForEach-Object { $$_.FullName.Substring((Get-Location).Path.Length + 1).Replace('\','/') }")
+
+SPV_FILES := $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_BUILD_DIR)/%.spv,$(SHADERS))
 
 #_____________________BUILD_________________________
 
@@ -44,48 +60,37 @@ compile: $(OBJ)
 link: $(EXE_NAME)
 
 $(OBJ_PATH)/%.o: $(SRC_DIR)/%.cpp
-	mkdir -p $(OBJ_PATH)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@if not exist "$(OBJ_PATH)" mkdir "$(OBJ_PATH)"
+	$(CXX) $(CXXFLAGS) -c "$<" -o "$@"
 
 $(EXE_NAME): $(OBJ)
-	mkdir -p $(EXE_PATH)
-	$(CXX) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $@
-
+	@if not exist "$(EXE_PATH)" mkdir "$(EXE_PATH)"
+	$(CXX) $(OBJ) $(LDFLAGS) $(LDLIBS) -o "$@"
 
 #_____________________DEBUG_________________________
 
 debug: $(EXE_NAME)
-	./$(EXE_NAME)
-
+	"$(EXE_NAME)"
 
 #_____________________RUN___________________________
 
 run: $(EXE_NAME)
-	./$(EXE_NAME)
-
+	"$(EXE_NAME)"
 
 #_____________________CLEAN_________________________
 
 clean:
-	rm -rf $(OBJ_PATH) $(EXE_PATH)/main
+	@if exist "$(OBJ_PATH)" rmdir /s /q "$(OBJ_PATH)"
+	@if exist "$(EXE_NAME)" del /q "$(EXE_NAME)"
 
 #_____________________SHADER________________________
-
-SHADER_SRC_DIR := shaders
-SHADER_BUILD_DIR := $(OBJ_PATH)/shader
-
-SHADERS := $(shell find $(SHADER_SRC_DIR) -type f \( \
-	-name '*.vert' -o \
-	-name '*.frag' -o \
-	-name '*.comp' \
-\) 2>/dev/null)
-
-SPV_FILES := $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_BUILD_DIR)/%.spv,$(SHADERS))
 
 shader: $(SPV_FILES)
 
 $(SHADER_BUILD_DIR)/%.spv: $(SHADER_SRC_DIR)/%
-	@mkdir -p $(dir $@)
-	glslc $< -o $@
-	
+	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
+	glslc "$<" -o "$@"
+
+#_____________________DEPENDENCIES__________________
+
 -include $(DEP)
