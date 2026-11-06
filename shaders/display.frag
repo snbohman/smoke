@@ -1,29 +1,14 @@
 #version 450
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
-layout(push_constant) uniform Push {
-    float dt;
-    float inflow;
-    float obstacleX;
-    float obstacleY;
-    float obstacleRadius;
-    float gain;
-    int   view;
-    float windowWidth;
-    float windowHeight;
-    float viscosity;
-    float dyeStripe;
-    int   reset;
-    int   palette;
-} pc;
+#define OBSTACLE_BINDING 5
+#include "common.glsl"
 
-bool isSolid(vec2 cellCentre) {
-    return distance(cellCentre, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius;
-}
 layout(binding = 0) uniform sampler2D uDye;
 layout(binding = 1) uniform sampler2D uVelocity;
 layout(binding = 2) uniform sampler2D uPressure;
 layout(binding = 3) uniform sampler2D uDivergence;
+layout(binding = 4) uniform sampler2D uResidual;
 
 // Red for positive, blue for negative
 vec3 signedColor(float value) {
@@ -31,16 +16,27 @@ vec3 signedColor(float value) {
     return vec3(max(x, 0.0), 0.0, max(-x, 0.0));
 }
 
-// Dye 0..1 to a colour, picked by the palette combo (same order as Palette in fluid.cpp)
+// Dye 0..1 to a colour, picked by the palette combo
 vec3 dyeColor(float dye) {
     float d = clamp(dye, 0.0, 1.0);
-    if (pc.palette == 0)                                          // mono: black to white
+    if (pc.palette == PALETTE_MONO)                               // black to white
         return vec3(d);
-    if (pc.palette == 1)                                          // ember: black, red, yellow, white
+    if (pc.palette == PALETTE_EMBER)                              // black, red, yellow, white
         return vec3(smoothstep(0.0, 0.4, d), smoothstep(0.25, 0.8, d), smoothstep(0.7, 1.0, d));
-    if (pc.palette == 2)                                          // ice: black, blue, cyan, white
+    if (pc.palette == PALETTE_ICE)                                // black, blue, cyan, white
         return vec3(smoothstep(0.6, 1.0, d), smoothstep(0.2, 0.8, d), smoothstep(0.0, 0.5, d));
     return mix(vec3(0.96), vec3(0.08, 0.10, 0.18), d);            // ink: dark on paper
+}
+
+// Out-of-plane vorticity dv/dx - du/dy by central differences, border cells copy the edge
+float vorticity(ivec2 cell) {
+    ivec2 size = textureSize(uVelocity, 0);
+    ivec2 hi = size - 1;
+    float v1 = texelFetch(uVelocity, clamp(cell + ivec2(1, 0), ivec2(0), hi), 0).y;
+    float v0 = texelFetch(uVelocity, clamp(cell - ivec2(1, 0), ivec2(0), hi), 0).y;
+    float u1 = texelFetch(uVelocity, clamp(cell + ivec2(0, 1), ivec2(0), hi), 0).x;
+    float u0 = texelFetch(uVelocity, clamp(cell - ivec2(0, 1), ivec2(0), hi), 0).x;
+    return 0.5 * ((v1 - v0) - (u1 - u0));
 }
 
 void main() {
@@ -58,22 +54,28 @@ void main() {
         return;
     }
 
-    vec2 cell = g * grid;
-    if (distance(cell, vec2(pc.obstacleX, pc.obstacleY)) < pc.obstacleRadius) {
+    // The solid as the simulation sees it: whole cells
+    ivec2 cell = min(ivec2(g * grid), ivec2(grid) - 1);
+    if (isSolid(cell)) {
         outColor = vec4(vec3(0.35), 1.0);
         return;
     }
 
     vec3 color;
-    if (pc.view == 0) {
+    if (pc.view == VIEW_DYE) {
         color = dyeColor(texture(uDye, g).x);
-    } else if (pc.view == 1) {
+    } else if (pc.view == VIEW_SPEED) {
         float speed = length(texture(uVelocity, g).xy) / (2.0 * max(pc.inflow, 1.0));
         color = vec3(speed, speed * speed, speed * speed * speed * 0.5);
-    } else if (pc.view == 2) {
+    } else if (pc.view == VIEW_PRESSURE) {
         color = signedColor(texture(uPressure, g).x);
-    } else {
+    } else if (pc.view == VIEW_DIVERGENCE) {
         color = signedColor(texture(uDivergence, g).x);
+    } else if (pc.view == VIEW_VORTICITY) {
+        // Scaled by D/U, so the gain does not depend on the inflow or the obstacle size
+        color = signedColor(vorticity(cell) * 2.0 * pc.obstacleRadius / max(pc.inflow, 1.0));
+    } else {
+        color = signedColor(texture(uResidual, g).x);
     }
     outColor = vec4(color, 1.0);
 }

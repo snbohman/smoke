@@ -54,13 +54,13 @@ $(EXE_NAME): $(OBJ)
 
 #_____________________DEBUG_________________________
 
-debug: $(EXE_NAME)
+debug: shader $(EXE_NAME)
 	./$(EXE_NAME)
 
 
 #_____________________RUN___________________________
 
-run: $(EXE_NAME)
+run: shader $(EXE_NAME)
 	./$(EXE_NAME)
 
 
@@ -68,6 +68,7 @@ run: $(EXE_NAME)
 
 clean:
 	rm -rf $(OBJ_PATH) $(EXE_PATH)/main
+	rm -rf build/*
 
 #_____________________SHADER________________________
 
@@ -86,6 +87,7 @@ shader: $(SPV_FILES)
 
 $(SHADER_BUILD_DIR)/%.spv: $(SHADER_SRC_DIR)/%
 	@mkdir -p $(dir $@)
-	glslc $< -o $@
-	
--include $(DEP)
+	glslc -MD -MF $(@:.spv=.d) $< -o $@
+
+SPV_DEP := $(SPV_FILES:.spv=.d)
+-include $(SPV_DEP)

@@ -1,0 +1,16 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "common.glsl"
+
+layout(rgba16f, binding = 0) uniform writeonly image2D uObstacleOut;
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uObstacleOut);
+    if (any(greaterThanEqual(id, size))) return;
+
+    vec2 centre = vec2(pc.obstacleX, pc.obstacleY);
+    float surface = distance(vec2(id) + 0.5, centre) - pc.obstacleRadius;
+    imageStore(uObstacleOut, id, vec4(surface, 0.0, 0.0, 0.0));
+}
