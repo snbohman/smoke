@@ -18,16 +18,20 @@ constexpr u32 VISCOSITY_ITERATIONS = 20;   // viscosity solve
 // inflow * dt above this many cells per step smears the semi-Lagrangian advection
 constexpr f32 STEP_LIMIT = 1.0f;
 
+// Share of the viscosity solve error above which the panel warns
+constexpr f32 VISCOSITY_ERROR_LIMIT = 0.05f;
+
 // How long the wake seed acts after a restart, in D/U. Same value as SEED_DURATION in common.glsl
 constexpr f32 SEED_DURATION = 2.0f;
 
 /* ------------------------------ Enums ------------------------------ */
 
-// Same order as the VIEW_* / PALETTE_* constants in common.glsl. Only append
+// Same order as the VIEW_* / PALETTE_* / ADVECT_* constants in common.glsl. Only append
 enum ViewMode : i32 {
     VIEW_DYE, VIEW_SPEED, VIEW_PRESSURE, VIEW_DIVERGENCE, VIEW_VORTICITY, VIEW_RESIDUAL, VIEW_COUNT
 };
 enum Palette : i32 { PALETTE_MONO, PALETTE_EMBER, PALETTE_ICE, PALETTE_INK, PALETTE_COUNT };
+enum Advection : i32 { ADVECT_BILINEAR, ADVECT_CUBIC_RK2, ADVECT_COUNT };
 
 /* ------------------------------ Components ------------------------------ */
 
@@ -38,7 +42,10 @@ struct FluidParams {
     bool resetRequested = true;            // restart the simulation; true = on the first frame
     f32 dt = 1.0f / 60.0f;                 // timestep; fixed, not the frame time
     f32 inflow = 40.0f;                    // inflow speed at the left edge
-    f32 viscosity = 0.0f;                  // kinematic viscosity nu, cells^2 / s
+    bool useReynolds = true;               // derive the viscosity from `reynolds`
+    f32 reynolds = 100.0f;                 // Re = U D / nu, D the obstacle diameter
+    f32 viscosity = 0.0f;                  // kinematic viscosity nu, cells^2 / s (derived while useReynolds)
+    i32 advection = ADVECT_CUBIC_RK2;
     f32 seedAmplitude = 0.05f;             // wake seed strength in U^2 / D; 0 = perfectly symmetric
     f32 obstacleX = GRID_WIDTH * 0.25f;    // circle centre, in cells
     f32 obstacleY = GRID_HEIGHT * 0.5f;
@@ -49,12 +56,14 @@ struct FluidParams {
     f32 gain = 0.1f;                       // brightness of the signed views
 };
 
-// What the simulation has done so far. Written by FluidBlockSystem, read by the UI
+// What the simulation has done so far. Written by FluidBlockSystem, read by the UI and the probe
 struct FluidState {
-    double time = 0.0;                     // simulated seconds since the last restart
+    double time = 0.0;                     // simulated seconds since the last restart, after this frame's step
+    bool stepped = false;                  // did this frame advance the simulation?
+    u32 epoch = 0;                         // counts restarts
 };
 
-// What the shaders read. Same member order as `Push` in common.glsl (60 bytes).
+// What the shaders read. Same member order as `Push` in common.glsl (64 bytes).
 // Members are only ever appended
 struct FluidBlock {
     f32 dt = 1.0f / 60.0f;
@@ -72,6 +81,7 @@ struct FluidBlock {
     i32 palette = PALETTE_EMBER;
     f32 time = 0.0f;
     f32 perturbation = 0.05f;
+    i32 advection = ADVECT_CUBIC_RK2;
 };
 
-static_assert(sizeof(FluidBlock) == 60, "FluidBlock must match the Push block in common.glsl");
+static_assert(sizeof(FluidBlock) == 64, "FluidBlock must match the Push block in common.glsl");

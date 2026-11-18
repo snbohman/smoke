@@ -1,17 +1,25 @@
 #pragma once
 
-#include <moss/extensions/imgui.hpp>
-#include <moss/extensions/vulkan.hpp>
-#include <string>
-
 #include "block.hpp"
 #include "params.hpp"
+#include "probe_data.hpp"
+#include "probe_system.hpp"
 #include "ui.hpp"
 
+#include <moss/extensions/imgui.hpp>
+#include <moss/extensions/vulkan.hpp>
+
+#include <string>
 
 inline std::string shader(const char* file) {
     return std::string("build/shader/") + file;
 }
+
+// Storage formats of the sim images. Keep in step with FIELD_VEC2 / FIELD_SCALAR / FIELD_DYE
+// in shaders/common.glsl (rg32f / r32f / rgba16f)
+constexpr VkFormat FORMAT_VEC2   = VK_FORMAT_R32G32_SFLOAT;
+constexpr VkFormat FORMAT_SCALAR = VK_FORMAT_R32_SFLOAT;
+constexpr VkFormat FORMAT_DYE    = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 class FluidContext : public Context {
 public:
@@ -26,9 +34,9 @@ private:
     /* ---------------------------- Helpers ---------------------------- */
 
     // One entity per sim image, all the same size
-    static void addField(Mirror& mirror, const char* name, bool doubleBuffered) {
+    static void addField(Mirror& mirror, const char* name, VkFormat format, bool doubleBuffered) {
         mirror.create()
-            .attach<vk::SimImage>({.name = name})
+            .attach<vk::SimImage>({.name = name, .format = format})
             .attach<vk::ImageExtent>({.width = GRID_WIDTH, .height = GRID_HEIGHT});
         if (doubleBuffered) mirror.attach<vk::DoubleBuffered>();
     }
@@ -42,17 +50,18 @@ private:
             .template attach<vk::ComputeShader>({.path = shader(file)})
             .template attach<vk::Bind>(binds...)
             .template attach<vk::Dispatch>(sizedBy);
-        if (repeat > 1) mirror.template attach<vk::Repeat>({.count = repeat});
-        mirror.template attach<vk::PushConstants>(initial);
+        if (repeat > 1) mirror.attach<vk::Repeat>({.count = repeat});
+        mirror.attach<vk::PushConstants>(initial);
     }
 
     /* ---------------------------- Setup ---------------------------- */
 
+    // ProbeSystem copies the finished velocity, so it sits right after PassSystem
     static void connectSystems(Mirror& mirror) {
         mirror.connect<
             vk::Core, vk::FrameBegin, vk::ImageSystem,
             ig::Begin, FluidUi, FluidBlockSystem,
-            vk::PassSystem, ig::End, vk::FrameEnd
+            vk::PassSystem, ProbeSystem, ig::End, vk::FrameEnd
         >();
     }
 
@@ -63,7 +72,7 @@ private:
             .attach<vk::RendererSettings>()
             .attach<vk::HotReload>({.pollMs = 500})
             .attach<ig::Settings>({.saveLayout = true, .darkTheme = true, .docking = true, .dockspace = true});
-        mirror.create().attach<FluidParams>().attach<FluidState>();
+        mirror.create().attach<FluidParams>().attach<FluidState>().attach<FluidProbe>();
     }
 
     // Velocity, pressure and dye are read and rewritten in the same pass, so they are
@@ -71,13 +80,13 @@ private:
     // side of the viscosity solve. obstacle holds the signed distance to the solid;
     // residual holds the divergence left after the projection
     static void createFields(Mirror& mirror) {
-        addField(mirror, "velocity",       true);
-        addField(mirror, "pressure",       true);
-        addField(mirror, "dye",            true);
-        addField(mirror, "divergence",     false);
-        addField(mirror, "residual",       false);
-        addField(mirror, "velocitySource", false);
-        addField(mirror, "obstacle",       false);
+        addField(mirror, "velocity",       FORMAT_VEC2,   true);
+        addField(mirror, "pressure",       FORMAT_SCALAR, true);
+        addField(mirror, "dye",            FORMAT_DYE,    true);
+        addField(mirror, "divergence",     FORMAT_SCALAR, false);
+        addField(mirror, "residual",       FORMAT_SCALAR, false);
+        addField(mirror, "velocitySource", FORMAT_VEC2,   false);
+        addField(mirror, "obstacle",       FORMAT_SCALAR, false);
     }
 
     // Passes run in creation order

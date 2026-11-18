@@ -1,8 +1,8 @@
 #pragma once
 
-#include <moss/extensions/vulkan.hpp>
 #include "params.hpp"
 
+#include <moss/extensions/vulkan.hpp>
 
 // Copies FluidParams into the push block of every pass. Connect it after the
 // UI (an edit applies in the same frame) and before PassSystem
@@ -15,7 +15,10 @@ public:
         // Paused means dt = 0, except for the one frame a step was asked for
         const bool frozen = params.paused && !params.stepOnce;
 
-        if (params.resetRequested) state.time = 0.0;
+        if (params.resetRequested) {
+            state.time = 0.0;
+            state.epoch++;
+        }
 
         FluidBlock block;
         block.dt = frozen ? 0.0f : params.dt;
@@ -34,10 +37,13 @@ public:
         block.palette = params.palette;
         block.time = static_cast<f32>(state.time);
         block.perturbation = params.seedAmplitude;
+        block.advection = params.advection;
 
         // One-shot requests: the shaders see them this frame, then they are cleared
         params.resetRequested = false;
         params.stepOnce = false;
+
+        state.stepped = !frozen;
         if (!frozen) state.time += params.dt;
 
         cmd::Query<With<vk::PushConstants>>::init(key).each(
